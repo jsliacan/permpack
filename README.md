@@ -7,7 +7,7 @@ repository on my Github).
 set up
 ------
 
-Clone this repository and navigate to its `permpack/pkg` subdirectory.
+Assuming you have downloaded or cloned this repository, navigate to its `permpack/pkg` subdirectory.
 
     $ cd path/to/permpack/pkg/
   
