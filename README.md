@@ -1,7 +1,7 @@
 # permpack
 
 In many ways a "barebones" implementation of Razborov's flag algebras framework for permutations in
-[SageMath](http://sagemath.org). The code resembles to [Flagmatic's](http://flagmatic.org) (written by Emil Vaughan). I worked with Flagmatic before (see [Flagmatic](https://github.com/jsliacan/flagmatic.git)
+[SageMath](http://sagemath.org). The usage resembles [Flagmatic's](http://flagmatic.org) (written by Emil Vaughan). I worked with Flagmatic before (see [Flagmatic](https://github.com/jsliacan/flagmatic.git)
 repository on my Github).
 
 set up
