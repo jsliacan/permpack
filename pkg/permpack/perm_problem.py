@@ -6,10 +6,11 @@ from sage.combinat.permutation import Permutation, Permutations, PatternAvoider
 from sage.combinat.combination import Combinations
 from sage.combinat.subset import Subsets, Set
 from sage.arith.all import factorial, binomial
-from sage.rings.all import Integer, Rational
+from sage.rings.all import Integer, Rational, QQ
 from sage.doctest.util import Timer
 from sage.misc.functional import numerical_approx
 from sage.matrix.all import matrix
+from sage.modules.free_module_element import vector
 
 from perm_flag import *
 from utils import *
@@ -601,18 +602,37 @@ class PermProblem:
 
         return
 
-    def solve_sdp(self, outfile="sdp.out"):
-
-        """ Ignore input for now, later can use it."""
+    def solve_sdp(self, outfile="sdp.out", solver="csdp"):
         
         self._write_sdp_file()
 
-        os.system("csdp sdp.dat-s sdp.out")
-        
+        if solver == "csdp":
+            os.system("csdp sdp.dat-s sdp.out")
+        elif solver == "sdpa_dd":
+            os.system("sdpa_dd -ds sdp.dat-s -o sdp.out")
+            
 
-    def analyze_sdp_output(self, solfile="sdp.out"):
+    def exactify(self, solfile="sdp.out", recognition_precision=10e6, rounding_precision=10e10):
 
-        """Take data from the output file created by the SDP solver."""
+        """
+        Round matrices to have entries in a given field, so far only
+        QQ. Does not accommodate assumptions.
+
+
+        INPUT:
+
+        - solfile: the name of the solution file, as a string
+
+        - recognition_precision: recognize number as identical if this far from the guessed value
+
+        - rounding_precison: denominator in rounding: round(a/rounding_precision)*rounding_precision
+
+        EXAMPLE:
+
+        sage: 
+        """
+            
+        # take data from the output file created by the SDP solver
         
         sf = open(solfile, 'r')
 
@@ -621,7 +641,8 @@ class PermProblem:
         
         for line in sf:
             l = line.strip().split(' ')
-
+            if l[0] == 'SDPA-DD':
+                raise ValueError("Reading SDPA-DD output files not implemented yet. Sorry.\n")
             # only process dual 
             if l[0] == '2':
                 
@@ -644,4 +665,100 @@ class PermProblem:
 
         self._sdp_Q_matrices = [matrix(Q) for Q in self._sdp_Q_matrices]
 
+        
+        # transforming matrices
+
+        self._Qdash_matrices = list()
+        self._R_matrices = list()
+        self._Rdash_matrices = list()
+        self._Qexact_matrices = list()
+        
+        
+        for Q in self._sdp_Q_matrices:
+            estuff = Q.eigenvectors_right()
+            evectors = [x[1][0] for x in estuff] # right eigenvectors
+            evals = [x[0] for x in estuff]
+            
+            zerospace_indices = list()
+            zerospace_vectors = list()
+            ones_indices = list()
+            for i in range(len(evals)):
+                if abs(evals[i]) < 1/recognition_precision: # will round these to 0
+                    zerospace_indices.append(i)
+                    evals[i] = 0
+            
+            # subtract vec from all other evectors so they are 0 where vec is 1
+            for i in zerospace_indices:
+                # make max vec_i entry equal 1
+                maxvec = max(evectors[i])
+                minvec = min(evectors[i])
+                if abs(maxvec) > abs(minvec):
+                    mindex = list(evectors[i]).index(maxvec)
+                    mvec = maxvec
+                else:
+                    mindex = list(evectors[i]).index(minvec)
+                    mvec = minvec
+                veci = vector([x/mvec for x in evectors[i]])
+                evectors[i] = veci
+                ones_indices.append(mindex)
+
+                # subtract vec_i from other vectors
+                for j in zerospace_indices:
+                    if j != i:
+                        c = evectors[j][mindex]
+                        veci_altered = vector([x*c for x in evectors[i]])
+                        evectors[j] = evectors[j]-veci_altered
+
+            for i in zerospace_indices:
+                zerospace_vectors.append(evectors[i])
+                
+            # complete zerospace to basis for the whole space
+            d = Q.dimensions()[0] # square matrix
+            nonzerospace_basis = list()
+            free_indices = range(d)
+            for i in ones_indices:
+                free_indices.remove(i)
+                
+            for i in range(d-len(zerospace_indices)):
+                vec = [0 for x in range(d)]
+                vec[free_indices[i]] = 1
+                nonzerospace_basis.append(vec)
+
+            # computing R matrices
+            Rt = matrix(zerospace_vectors + nonzerospace_basis)
+            Rtflat = Rt.list()
+            for i in range(d*d):
+                   Rtflat[i] = round(Rtflat[i]*rounding_precision)/rounding_precision # rational now
+            R = matrix(QQ,d,d,Rtflat).transpose()
+            self._R_matrices.append(R)
+
+            # computing Qdash matrices
+            Qdash = R.transpose()*Q*R
+            Qdash = Qdash.delete_columns(range(len(zerospace_indices)))
+            Qdash = Qdash.delete_rows(range(len(zerospace_indices)))
+            qd = Qdash.dimensions()[0] # square mat
+            Qdashflat = Qdash.list()
+            for i in range(qd):
+                Qdashflat[i] = round(Qdashflat[i]*rounding_precision)/rounding_precision # rational now
+            Qdash = matrix(QQ,qd,qd,Qdashflat)
+            # deleting rows/columns that will be multiplied by 0 eigenvectors in R
+            Qdash.delete_rows(range(len(zerospace_indices)))
+            Qdash.delete_columns(range(len(zerospace_indices)))
+            self._Qdash_matrices.append(Qdash)
+
+            # computing Rdash matrices
+            # Rdash = R.inverse without the rows that correspond to 0 eigenvectors
+            Rdash = R.inverse()
+            Rdash = Rdash.delete_rows(range(len(zerospace_indices)))
+            self._Rdash_matrices.append(Rdash)
+
+            # Q = Rdash^T*Qdash*Rdash
+            Qexact = Rdash.transpose()*Qdash*Rdash
+            self._Qexact_matrices.append(Qexact)
+
+        # matrices done
+
+        # FORM LINEAR SYSTEM OF EQUATIONS
+        
+        
         
