@@ -2,6 +2,7 @@ import os, sys, time, multiprocessing
 
 from numpy import array
 
+from sage.misc.misc import SAGE_TMP
 from sage.combinat.permutation import Permutation, Permutations, PatternAvoider
 from sage.combinat.combination import Combinations
 from sage.combinat.subset import Subsets, Set
@@ -607,9 +608,13 @@ class PermProblem:
         self._write_sdp_file()
 
         if solver == "csdp":
+            self._solver = "CSDP"
             os.system("csdp sdp.dat-s sdp.out")
         elif solver == "sdpa_dd":
+            self._solver = "SDPA_DD"
             os.system("sdpa_dd -ds sdp.dat-s -o sdp.out")
+        else:
+            raise NotImplementedError
             
 
     def exactify(self, solfile="sdp.out", recognition_precision=10e6, rounding_precision=10e10):
@@ -633,36 +638,119 @@ class PermProblem:
         """
             
         # take data from the output file created by the SDP solver
-        
-        sf = open(solfile, 'r')
+
+        try:
+            sf = open(solfile, 'r')
+        except IOError as e:
+            print "I/O error({0}): {1}".format(e.errno, e.strerror)
+        except:
+            print "Unexpected error:", sys.exc_info()[0]
+            raise
 
         self._sdp_Q_matrices = [[[0 for x in self.flags[i]] for y in self.flags[i]] for i in range(len(self.types))]
         self._sdp_slacks = [0 for x in self.admissible_perms]
+
+        # solver: CSDP
+        if self._solver == 'CSDP':
+            sys.stdout.write("Reading output of the CSDP solver...")
+            sys.stdout.flush()
+            for line in sf:
+                l = line.strip().split(' ')
+
+                # only process dual 
+                if l[0] == '2':
+
+                    # clean line
+                    q = int(l[1]) # index of Q (+2)
+                    x = int(l[2])-1 # x coordinate in Q
+                    y = int(l[3])-1 # y coord in Q
+                    v = float(l[4]) # value at Q[x,y]
+
+                    # process line
+                    if q == 1:
+                        self._sdp_bound = v
+
+                    if 1 < q < len(self.types)+2:
+                        self._sdp_Q_matrices[q-2][x][y] = v
+                        self._sdp_Q_matrices[q-2][y][x] = v
+
+                    if q == len(self.types)+2:
+                        self._sdp_slacks[x] = v
+
+        # solver: SDPA-DD
+        elif self._solver == 'SDPA_DD':
+
+            sys.stdout.write("Reading output of the SDPA-DD solver...")
+            sys.stdout.flush()
+            
+            obj_val = None
+            begin = False
+            q = -1
+            r = 0
+            
+            for line in sf:
+
+                if line[:12] == "objValPrimal":
+                    self._sdp_bound = float(line.strip().split(' ')[-1])
+                    continue
+                    
+                # do nothing until yMat is found
+                if line[:6] == "yMat =":
+                    begin = True
+                    continue
+
+                # skip first/last bracket 
+                if line.strip() == "{" or line.strip() == "}":
+                    continue
+                
+                # skip the line block with obj value
+                if begin and line[0] == "{" and obj_val == None:
+                    
+                    obj_val = self._sdp_bound
+                    continue
+
+                if begin and line[0] == "{":
+                    
+                    q += 1
+                    r = 0
+                    line = line.strip()
+                    while line[0] in [' ','{', ',']:
+                        line = line[1:]
+                    while line[-1] in [' ','}', ',']:
+                        line = line[:-1]
+                    qrow = line.split(',')
+                    
+                    if q < len(self.types): # still reading in Q matrixes
+
+                        for i in range(len(qrow)):
+                            self._sdp_Q_matrices[q][r][i] = float(qrow[i])
+                            
+                    else: # then we are already reading in slacks
+
+                        for i in range(len(qrow)):
+                            self._sdp_slacks[i] = float(qrow[i])
+
+                        break # we are finished.
+                
+                elif begin:
+                    
+                    r += 1
+                    line = line.strip()
+                    while line[0] in [' ', '{', ',']:
+                        line = line[1:]
+                    while line[-1] in [' ', '}', ',']:
+                        line = line[:-1]
+
+                    qrow = line.split(',')
+                    for i in range(len(qrow)):
+                        self._sdp_Q_matrices[q][r][i] = float(qrow[i])
+                else:
+                    continue
+                        
+        else:
+            raise NotImplementedError("Your solver's output cannot be processed by Permpack. Sorry!")    
+
         
-        for line in sf:
-            l = line.strip().split(' ')
-            if l[0] == 'SDPA-DD':
-                raise ValueError("Reading SDPA-DD output files not implemented yet. Sorry.\n")
-            # only process dual 
-            if l[0] == '2':
-                
-                # clean line
-                q = int(l[1]) # index of Q (+2)
-                x = int(l[2])-1 # x coordinate in Q
-                y = int(l[3])-1 # y coord in Q
-                v = float(l[4]) # value at Q[x,y]
-                
-                # process line
-                if q == 1:
-                    self._sdp_bound = v
-
-                if 1 < q < len(self.types)+2:
-                    self._sdp_Q_matrices[q-2][x][y] = v
-                    self._sdp_Q_matrices[q-2][y][x] = v
-
-                if q == len(self.types)+2:
-                    self._sdp_slacks[x] = v
-
         self._sdp_Q_matrices = [matrix(Q) for Q in self._sdp_Q_matrices]
 
         
@@ -672,12 +760,23 @@ class PermProblem:
         self._R_matrices = list()
         self._Rdash_matrices = list()
         self._Qexact_matrices = list()
-        
-        
+
+        k = 0
         for Q in self._sdp_Q_matrices:
+
+            sys.stdout.write("Transforming matrix Q for type %d\n" %k)
+            sys.stdout.flush()
+
+            
+            sys.stdout.write("Finding eigen-stuff for matrix Q for type %d\n" %k)
+            sys.stdout.flush()
+            
             estuff = Q.eigenvectors_right()
             evectors = [x[1][0] for x in estuff] # right eigenvectors
             evals = [x[0] for x in estuff]
+
+            sys.stdout.write("Computing zero-space for matrix Q for type %d\n" %k)
+            sys.stdout.flush()
             
             zerospace_indices = list()
             zerospace_vectors = list()
@@ -724,6 +823,9 @@ class PermProblem:
                 vec[free_indices[i]] = 1
                 nonzerospace_basis.append(vec)
 
+            sys.stdout.write("Computing R matrices for matrix Q for type %d\n" %k)
+            sys.stdout.flush()
+            
             # computing R matrices
             Rt = matrix(zerospace_vectors + nonzerospace_basis)
             Rtflat = Rt.list()
@@ -732,8 +834,12 @@ class PermProblem:
             R = matrix(QQ,d,d,Rtflat).transpose()
             self._R_matrices.append(R)
 
+            sys.stdout.write("Computing Qdash matrices for Q for type %d\n" %k)
+            sys.stdout.flush()
+            
             # computing Qdash matrices
             Qdash = R.transpose()*Q*R
+            # deleting rows/columns that will be multiplied by 0 eigenvectors in R
             Qdash = Qdash.delete_columns(range(len(zerospace_indices)))
             Qdash = Qdash.delete_rows(range(len(zerospace_indices)))
             qd = Qdash.dimensions()[0] # square mat
@@ -741,24 +847,48 @@ class PermProblem:
             for i in range(qd):
                 Qdashflat[i] = round(Qdashflat[i]*rounding_precision)/rounding_precision # rational now
             Qdash = matrix(QQ,qd,qd,Qdashflat)
-            # deleting rows/columns that will be multiplied by 0 eigenvectors in R
-            Qdash.delete_rows(range(len(zerospace_indices)))
-            Qdash.delete_columns(range(len(zerospace_indices)))
+            #Qdash.delete_rows(range(len(zerospace_indices)))
+            #Qdash.delete_columns(range(len(zerospace_indices)))
             self._Qdash_matrices.append(Qdash)
 
+            sys.stdout.write("Computing Rdash matrices for Q for type %d\n" %k)
+            sys.stdout.flush()
+            start = time.time()
             # computing Rdash matrices
             # Rdash = R.inverse without the rows that correspond to 0 eigenvectors
             Rdash = R.inverse()
+            end = time.time()
+            sys.stdout.write("time duration: %f\n" %(end-start))
             Rdash = Rdash.delete_rows(range(len(zerospace_indices)))
             self._Rdash_matrices.append(Rdash)
+            
 
             # Q = Rdash^T*Qdash*Rdash
             Qexact = Rdash.transpose()*Qdash*Rdash
             self._Qexact_matrices.append(Qexact)
 
+            k += 1
         # matrices done
 
         # FORM LINEAR SYSTEM OF EQUATIONS
-        
-        
-        
+
+        sys.stdout.write("Computing exact bound.\n")
+        sys.stdout.flush()
+            
+        self._exact_bounds = [0 for x in self.admissible_perms]
+
+        for ti in range(len(self.types)):
+            for fp in self.flag_products[ti]:
+                aij = Integer(fp[3])/Integer(fp[4])
+                if fp[1] == fp[2]:
+                    self._exact_bounds[fp[0]] += aij*self._Qexact_matrices[ti][fp[1]][fp[2]]
+                else:
+                    self._exact_bounds[fp[0]] += aij*self._Qexact_matrices[ti][fp[1]][fp[2]]*2
+
+        self._exact_bound = max(self._exact_bounds)
+        sys.stdout.write("Done.\n")
+        sys.stdout.flush()
+            
+"""
+Agreed, the UK was in a different position some 20 years back. But it didn't get worse, it just seems worse to the people who expect to do the job their dad/mum did 20 years ago and get a better standard of life than their parents did. Many things changed since 20 years ago: we care about emissions today (as we should), we realised that the pension system is unsustainable, we are automating productions, etc. So it's unfair for someone to expect life as it was 20 years back when so many things around them progressed but they didn't change a thing.
+"""
