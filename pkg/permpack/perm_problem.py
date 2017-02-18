@@ -1,4 +1,4 @@
-import os, sys, time, multiprocessing
+import os, sys, time, multiprocessing, numpy
 
 from numpy import array
 
@@ -831,7 +831,7 @@ class PermProblem:
             Rtflat = Rt.list()
             for i in range(d*d):
                    Rtflat[i] = round(Rtflat[i]*rounding_precision)/rounding_precision # rational now
-            R = matrix(QQ,d,d,Rtflat).transpose()
+            R = matrix(QQ,d,d,Rtflat, sparse=True).transpose()
             self._R_matrices.append(R)
 
             sys.stdout.write("Computing Qdash matrices for Q for type %d\n" %k)
@@ -850,7 +850,7 @@ class PermProblem:
             #Qdash.delete_rows(range(len(zerospace_indices)))
             #Qdash.delete_columns(range(len(zerospace_indices)))
             self._Qdash_matrices.append(Qdash)
-
+"""
             sys.stdout.write("Computing Rdash matrices for Q for type %d\n" %k)
             sys.stdout.flush()
             start = time.time()
@@ -889,6 +889,4 @@ class PermProblem:
         sys.stdout.write("Done.\n")
         sys.stdout.flush()
             
-"""
-Agreed, the UK was in a different position some 20 years back. But it didn't get worse, it just seems worse to the people who expect to do the job their dad/mum did 20 years ago and get a better standard of life than their parents did. Many things changed since 20 years ago: we care about emissions today (as we should), we realised that the pension system is unsustainable, we are automating productions, etc. So it's unfair for someone to expect life as it was 20 years back when so many things around them progressed but they didn't change a thing.
 """
