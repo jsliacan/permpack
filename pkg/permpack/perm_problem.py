@@ -10,7 +10,7 @@ from sage.arith.all import factorial, binomial
 from sage.rings.all import Integer, Rational, QQ
 from sage.doctest.util import Timer
 from sage.misc.functional import numerical_approx
-from sage.matrix.all import matrix
+from sage.matrix.all import matrix, diagonal_matrix
 from sage.modules.free_module_element import vector
 
 from perm_flag import *
@@ -617,7 +617,7 @@ class PermProblem:
             raise NotImplementedError
             
 
-    def exactify(self, solfile="sdp.out", recognition_precision=10e6, rounding_precision=10e10):
+    def exactify(self, solfile="sdp.out", recognition_precision=10, rounding_precision=10e20):
 
         """
         Round matrices to have entries in a given field, so far only
@@ -628,15 +628,22 @@ class PermProblem:
 
         - solfile: the name of the solution file, as a string
 
-        - recognition_precision: recognize number as identical if this far from the guessed value
+        - recognition_precision: number of decimal digits to round to 0
 
         - rounding_precison: denominator in rounding: round(a/rounding_precision)*rounding_precision
 
         EXAMPLE:
 
-        sage: 
+        sage: p = PermProblem(4, density_perm="132")
+        sage: p.solve()
+        sage: p.exactify(rounding_precision=10^10)
+        sage: p.bound
         """
-            
+
+        num_types = len(self.types)
+        num_flags = [len(self.flags[ti]) for ti in range(num_types)]
+        
+        
         # take data from the output file created by the SDP solver
 
         try:
@@ -650,9 +657,11 @@ class PermProblem:
         self._sdp_Q_matrices = [[[0 for x in self.flags[i]] for y in self.flags[i]] for i in range(len(self.types))]
         self._sdp_slacks = [0 for x in self.admissible_perms]
 
+        self._exact_Q_matrices = list()
+
         # solver: CSDP
         if self._solver == 'CSDP':
-            sys.stdout.write("Reading output of the CSDP solver...")
+            sys.stdout.write("Reading output of the CSDP solver...\n")
             sys.stdout.flush()
             for line in sf:
                 l = line.strip().split(' ')
@@ -680,7 +689,7 @@ class PermProblem:
         # solver: SDPA-DD
         elif self._solver == 'SDPA_DD':
 
-            sys.stdout.write("Reading output of the SDPA-DD solver...")
+            sys.stdout.write("Reading output of the SDPA-DD solver...\n")
             sys.stdout.flush()
             
             obj_val = None
@@ -754,6 +763,45 @@ class PermProblem:
         self._sdp_Q_matrices = [matrix(Q) for Q in self._sdp_Q_matrices]
 
         
+        # ROUNDING
+
+        for ti in range(num_types):
+            Qi = self._sdp_Q_matrices[ti]
+
+            # preprocess matrices (to avoid neg evalues)
+            Lsdp = numpy.linalg.cholesky(Qi)
+
+
+            L = matrix(QQ, num_flags[ti], num_flags[ti], sparse=True)
+            for i in range(num_flags[ti]):
+                for j in range(num_flags[ti]):
+                    L[i,j] = round(Lsdp[i,j]*rounding_precision)/rounding_precision
+            Qexact = L*L.transpose()
+            self._exact_Q_matrices.append(Qexact)
+
+        
+        # FORM LINEAR SYSTEM OF EQUATIONS
+
+        sys.stdout.write("Computing exact bound.\n")
+        sys.stdout.flush()
+            
+        self._exact_bounds = [0 for x in self.admissible_perms]
+
+        for ti in range(len(self.types)):
+            for fp in self.flag_products[ti]:
+                aij = Integer(fp[3])/Integer(fp[4])
+                if fp[1] == fp[2]:
+                    self._exact_bounds[fp[0]] += aij*self._exact_Q_matrices[ti][fp[1]][fp[2]]
+                else:
+                    self._exact_bounds[fp[0]] += aij*self._exact_Q_matrices[ti][fp[1]][fp[2]]*2
+
+        self._exact_bound = max(self._exact_bounds)
+        sys.stdout.write("Done.\n")
+        sys.stdout.flush()
+            
+            
+
+"""
         # transforming matrices
 
         self._Qdash_matrices = list()
@@ -850,7 +898,7 @@ class PermProblem:
             #Qdash.delete_rows(range(len(zerospace_indices)))
             #Qdash.delete_columns(range(len(zerospace_indices)))
             self._Qdash_matrices.append(Qdash)
-"""
+
             sys.stdout.write("Computing Rdash matrices for Q for type %d\n" %k)
             sys.stdout.flush()
             start = time.time()
@@ -870,23 +918,4 @@ class PermProblem:
             k += 1
         # matrices done
 
-        # FORM LINEAR SYSTEM OF EQUATIONS
-
-        sys.stdout.write("Computing exact bound.\n")
-        sys.stdout.flush()
-            
-        self._exact_bounds = [0 for x in self.admissible_perms]
-
-        for ti in range(len(self.types)):
-            for fp in self.flag_products[ti]:
-                aij = Integer(fp[3])/Integer(fp[4])
-                if fp[1] == fp[2]:
-                    self._exact_bounds[fp[0]] += aij*self._Qexact_matrices[ti][fp[1]][fp[2]]
-                else:
-                    self._exact_bounds[fp[0]] += aij*self._Qexact_matrices[ti][fp[1]][fp[2]]*2
-
-        self._exact_bound = max(self._exact_bounds)
-        sys.stdout.write("Done.\n")
-        sys.stdout.flush()
-            
-"""
+"""            
