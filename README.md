@@ -32,7 +32,7 @@ notes
 
 2. Tested on
 
-  * Mac OSX El Capitan with Sage-6.4 and Sage-7.3beta3
+  * Mac OSX El Capitan and Sierra with Sage-6.4-7.4
   * Ubuntu 14.04/16.04 with Sage-7.2-7.4
 
 3. When using Sage-6.x, x<10, on El Capitan, you need to disable *System Integrity Protection* by pressing `cmd+R` on boot, then launching Terminal and typing `csrutil disable`. Reboot. To enable, repeat the process and type `csrutil enable`. You should know what this does before doing it.
