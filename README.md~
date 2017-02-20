@@ -33,10 +33,8 @@ notes
 2. Tested on
 
   * Mac OSX El Capitan with Sage-6.4 and Sage-7.3beta3
-  * Ubuntu 14.04/16.04 with Sage-7.2-7.4
+  * Ubuntu 14.04 with Sage-7.2
 
 3. When using Sage-6.x, x<10, on El Capitan, you need to disable *System Integrity Protection* by pressing `cmd+R` on boot, then launching Terminal and typing `csrutil disable`. Reboot. To enable, repeat the process and type `csrutil enable`. You should know what this does before doing it.
 
 4. Permpack stores flag products for problems that it encountered before. Then loads them from the file next time. This is sometimes useful (faster for big problems) and sometimes annoying (creates 60MB files). 
-
-5. Permpack can work with SDPA-DD (double precision) solver. Just use `solve_sdp(solver='sdpa_dd')' option in when solving the SDP.
