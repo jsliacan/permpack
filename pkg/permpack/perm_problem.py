@@ -69,32 +69,32 @@ class PermProblem:
             self.forbidden_perms = [PermFlag(x) for x in forbid]
 
         # ADMISSIBLE PERMS
-        sys.stdout.write("Generating admissible permutations: ")
+        sys.stdout.write("Generating admissible permutations... ")
         sys.stdout.flush()
         self.admissible_perms = self._generate_admissible_perms()
-        sys.stdout.write("OK.\n")
+        sys.stdout.write("\033[32mOK\033[m.\n")
         sys.stdout.flush()
         
         # TYPES
-        sys.stdout.write("Generating types: ")
+        sys.stdout.write("Generating types... ")
         sys.stdout.flush()
         self.types = self._generate_types()
-        sys.stdout.write("OK.\n")
+        sys.stdout.write("\033[32mOK\033[m.\n")
 
         self._info = len(self.types)
 
         # FLAGS
-        sys.stdout.write("Generating flags: ")
+        sys.stdout.write("Generating flags... ")
         sys.stdout.flush()
         # generate flags
         self.flags = self._generate_flags()
-        sys.stdout.write("OK.\n")
+        sys.stdout.write("\033[32mOK\033[m.\n")
 
         # COMPUTING DENSITIES
-        sys.stdout.write("Expressing density pattern as a linear combination of admissible permutations: ")
+        sys.stdout.write("Expressing density pattern as a linear combination of admissible permutations... ")
         sys.stdout.flush()
         self.densities = self._compute_densities()
-        sys.stdout.write("OK.\n")
+        sys.stdout.write("\033[32mOK\033[m.\n")
         sys.stdout.flush()
 
         self.assumptions = False
@@ -201,12 +201,12 @@ class PermProblem:
     
     def _generate_flags_slow(self):
 
-        sys.stdout.write("Generating flags (SLOW VERSION): ")
+        sys.stdout.write("Generating flags (SLOW VERSION).\n")
         sys.stdout.flush()
         
         flags = list()
 
-        sys.stdout.write("Generating flags: ")
+        sys.stdout.write("Generating flags... ")
         
         for t in self.types:
             t_flags = list()
@@ -222,7 +222,7 @@ class PermProblem:
 
             flags.append(t_flags)
 
-        sys.stdout.write("OK.\n")
+        sys.stdout.write("\033[32mOK\033[m.\n")
         sys.stdout.flush()
         
         return flags
@@ -385,10 +385,10 @@ class PermProblem:
         
         if os.path.exists(full_path):
 
-            sys.stdout.write("Loading flag_products from file: ")
+            sys.stdout.write("Loading flag_products from file... ")
             sys.stdout.flush()
             self._load_flag_products(full_path)
-            sys.stdout.write("OK.\n")
+            sys.stdout.write("\033[32mOK\033[m.\n")
 
         else:
             
@@ -416,13 +416,14 @@ class PermProblem:
             pool.close()
             pool.join()
 
-            sys.stdout.write("all done.\n")
+            sys.stdout.write("all done. \033[32mOK\033[m.\n")
             sys.stdout.flush()
             
-            sys.stdout.write("Writing flag_products into file: ")
+            sys.stdout.write("Writing flag_products into file... ")
             sys.stdout.flush()
             self._export_flag_products(full_path) # store for future use
-            sys.stdout.write("OK.\n")
+            sys.stdout.write("\033[32mOK\033[m.\n")
+
             
         
         
@@ -524,7 +525,7 @@ class PermProblem:
         """
 
         
-        sys.stdout.write("Writing SDP input file: ")
+        sys.stdout.write("Writing SDP input file... ")
         sys.stdout.flush()
 
         self._sdp_file = filename
@@ -598,14 +599,16 @@ class PermProblem:
 
         sdpfile.close()
         
-        sys.stdout.write("OK.\n")
+        sys.stdout.write("\033[32mOK\033[m.\n")
         sys.stdout.flush()
 
         return
 
     def solve_sdp(self, outfile="sdp.out", solver="csdp"):
-        
+
         self._write_sdp_file()
+        sys.stdout.write("Solving SDP problem...\n")
+        sys.stdout.flush()
 
         if solver == "csdp":
             self._solver = "CSDP"
@@ -615,7 +618,8 @@ class PermProblem:
             os.system("sdpa_dd -ds sdp.dat-s -o sdp.out")
         else:
             raise NotImplementedError
-            
+
+        sys.stdout.write("Finished. \033[32mOK\033[m.\n")
 
     def exactify(self, solfile="sdp.out", recognition_precision=10, rounding_precision=10e20):
 
@@ -640,6 +644,9 @@ class PermProblem:
         sage: p.bound
         """
 
+        sys.stdout.write("Transforming floating-point matrices to rational matrices...\n")
+        sys.stdout.flush()
+        
         num_types = len(self.types)
         num_flags = [len(self.flags[ti]) for ti in range(num_types)]
         
@@ -661,7 +668,7 @@ class PermProblem:
 
         # solver: CSDP
         if self._solver == 'CSDP':
-            sys.stdout.write("Reading output of the CSDP solver...\n")
+            sys.stdout.write("Reading output of the CSDP solver... ")
             sys.stdout.flush()
             for line in sf:
                 l = line.strip().split(' ')
@@ -686,10 +693,12 @@ class PermProblem:
                     if q == len(self.types)+2:
                         self._sdp_slacks[x] = v
 
+            sys.stdout.write("\033[32mOK\033[m.\n")
+            
         # solver: SDPA-DD
         elif self._solver == 'SDPA_DD':
 
-            sys.stdout.write("Reading output of the SDPA-DD solver...\n")
+            sys.stdout.write("Reading output of the SDPA-DD solver... ")
             sys.stdout.flush()
             
             obj_val = None
@@ -755,16 +764,21 @@ class PermProblem:
                         self._sdp_Q_matrices[q][r][i] = float(qrow[i])
                 else:
                     continue
+                
+            sys.stdout.write("\033[32mOK\033[m.\n")
                         
         else:
-            raise NotImplementedError("Your solver's output cannot be processed by Permpack. Sorry!")    
+            print "Your solver's output cannot be processed by Permpack. Sorry!"
+            return
 
         
         self._sdp_Q_matrices = [matrix(Q) for Q in self._sdp_Q_matrices]
 
         
         # ROUNDING
-
+        sys.stdout.write("Rounding Q matrices... ")
+        sys.stdout.flush()
+        
         for ti in range(num_types):
             Qi = self._sdp_Q_matrices[ti]
 
@@ -779,10 +793,11 @@ class PermProblem:
             Qexact = L*L.transpose()
             self._exact_Q_matrices.append(Qexact)
 
+        sys.stdout.write("\033[32mOK\033[m.\n")
         
         # FORM LINEAR SYSTEM OF EQUATIONS
 
-        sys.stdout.write("Computing exact bound.\n")
+        sys.stdout.write("Computing exact bound...\n")
         sys.stdout.flush()
             
         self._exact_bounds = [0 for x in self.admissible_perms]
@@ -928,6 +943,8 @@ class PermProblem:
 
         """
 
+        sys.stdout.write("Writing certificate into file... \n")
+        sys.stdout.flush()
 
         density_str = ""
         i = 0
@@ -961,4 +978,5 @@ class PermProblem:
         
         with open(outfile, 'w') as certfile:
             json.dump(data, certfile, sort_keys=False, indent=4)
-        print "Certificate written successfully to "+"\033[32m"+outfile+"\033[m."
+
+        sys.stdout.write("\033[32m[OK]   \033[mCertificate written successfully to \033[32m%s\033[m.\n" % outfile)
