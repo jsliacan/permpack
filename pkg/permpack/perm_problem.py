@@ -1,4 +1,4 @@
-import os, sys, time, multiprocessing, numpy
+import os, sys, time, multiprocessing, numpy, json
 
 from numpy import array
 
@@ -796,12 +796,12 @@ class PermProblem:
                     self._exact_bounds[fp[0]] += aij*self._exact_Q_matrices[ti][fp[1]][fp[2]]*2
 
         self._exact_bound = max(self._exact_bounds)
-        sys.stdout.write("Done.\n")
+        sys.stdout.write("\033[32m[OK]   \033[mDone. Exact bound is roughly %.10f. Access it from self._exact_bound.\n"% self._exact_bound)
         sys.stdout.flush()
             
             
 
-"""
+    """
         # transforming matrices
 
         self._Qdash_matrices = list()
@@ -918,4 +918,47 @@ class PermProblem:
             k += 1
         # matrices done
 
-"""            
+    """            
+
+    def write_certificate(self, outfile="certificate.js"):
+
+        """
+        Write problem data to file so the bound can be verified. In particular,
+        write problem description, admissible permutations, types, flags, L-matrices.
+
+        """
+
+
+        density_str = ""
+        i = 0
+
+        if len(self.density_pattern) == 1 and self.density_pattern[0][1] == 1:
+            density_str = str(self.density_pattern[0][0])
+        else:
+            for perm,coef in self.density_pattern:
+                if i == 0:
+                    density_str += str(coef)+"*"+str(perm)
+                else:
+                    density_str += " + "+str(coef)+"*"+str(perm)
+                i += 1
+
+        if self.forbidden_perms:
+            problem_description = 'Maximize the density of '+ density_str+ " in "+ str(self.forbidden_perms)+"-free permutations."
+        else:
+            problem_description = 'Maximize the density of '+ density_str+"."
+
+
+                
+        data = {
+            'problem': problem_description,
+            'order of admissible permutations': int(self.N),
+            'admissible permutations': [str(x) for x in self.admissible_perms],
+            'types': [str(x) for x in self.types],
+            'flags': [[str(x) for x in t_flags] for t_flags in self.flags],
+            'bound': [str(x) for x in self._exact_bound]
+        }
+            
+        
+        with open(outfile, 'w') as certfile:
+            json.dump(data, certfile, sort_keys=False, indent=4)
+        print "Certificate written successfully to "+"\033[32m"+outfile+"\033[m."
