@@ -810,7 +810,11 @@ class PermProblem:
                 else:
                     self._exact_bounds[fp[0]] += aij*self._exact_Q_matrices[ti][fp[1]][fp[2]]*2
 
+        for di in range(len(self.densities)):
+            self._exact_bounds[di] += self.densities[di]
+            
         self._exact_bound = max(self._exact_bounds)
+        sys.stdout.write("\033[31m[WARNING] If you used assumptions, those are not included in the bounds! Matrices have still been rounded correctly. This will be added later.\033[m\n")
         sys.stdout.write("\033[32m[OK]   \033[mDone. Exact bound is roughly %.10f. Access it from self._exact_bound.\n"% self._exact_bound)
         sys.stdout.flush()
             
