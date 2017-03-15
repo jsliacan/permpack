@@ -1,5 +1,6 @@
-from permpack.all import *
+from flagmatic.all import *
 
-# we know the maximizer is layered -> can forbid things
-p = PermProblem(7, density_pattern="1324", forbid=["231","312"])
-p.solve_sdp()
+p = OrientedGraphProblem(8, forbid_induced=["3:12", "3:1223", "3:122331"], density="4:1213142434")
+p.solve_sdp(solver="csdp")
+p.make_exact(denominator=10^20)
+p.write_certificate("cert1324.js")
