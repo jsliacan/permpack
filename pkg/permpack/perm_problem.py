@@ -665,6 +665,7 @@ class PermProblem:
         self._sdp_slacks = [0 for x in self.admissible_perms]
 
         self._exact_Q_matrices = list()
+        self._exact_L_matrices = list()
 
         # solver: CSDP
         if self._solver == 'CSDP':
@@ -792,6 +793,7 @@ class PermProblem:
                     L[i,j] = round(Lsdp[i,j]*rounding_precision)/rounding_precision
             Qexact = L*L.transpose()
             self._exact_Q_matrices.append(Qexact)
+            self._exact_L_matrices.append(L)
 
         sys.stdout.write("\033[32mOK\033[m.\n")
         
@@ -976,7 +978,8 @@ class PermProblem:
             'admissible permutations': [str(x) for x in self.admissible_perms],
             'types': [str(x) for x in self.types],
             'flags': [[str(x) for x in t_flags] for t_flags in self.flags],
-            'bound': [str(x) for x in self._exact_bound]
+            'bound': [str(x) for x in self._exact_bound],
+            'L matrices': [[str(row) for row in mat] for mat in self._exact_L_matrices]
         }
             
         
