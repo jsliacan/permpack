@@ -13,13 +13,11 @@ def normalize(l, n):
         sage: normalize([2,5,3],3)
         sage: [1,3,2]
         """
-        lst = [x for x in l]
-        MAXVAL = 999999999999 # hopefully big enough to be MAXVAL
-        normal_lst = [0 for x in lst]
-        for i in range(1,n+1):
-            imin = lst.index(min(lst))
-            normal_lst[imin] = i
-            lst[imin] = MAXVAL
+        lst = range(n)
+        lst.sort(key=lambda i: l[i])
+        normal_lst = range(n)
+        for i, x in enumerate(lst):
+            normal_lst[x] = i + 1
         return normal_lst
 """
 def complement(pos,m):
